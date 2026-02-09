@@ -7,18 +7,18 @@ on_error() {
 }
 trap on_error ERR
 
-# Prefer host paths so Windows node can resolve files when invoked from WSL/Git Bash.
+# Resolve repo root in POSIX form for bash/WSL; keep optional Windows form for tooling that needs it.
+ROOT_DIR_POSIX="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if command -v wslpath >/dev/null 2>&1; then
-  ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && wslpath -w .)"
+  ROOT_DIR_WIN="$(wslpath -w "$ROOT_DIR_POSIX")"
 elif ROOT_DIR_TMP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -W 2>/dev/null)"; then
-  ROOT_DIR="$ROOT_DIR_TMP"
-else
-  ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  ROOT_DIR_WIN="$ROOT_DIR_TMP"
 fi
-HASH_FILE="$ROOT_DIR/src/canvas-host/a2ui/.bundle.hash"
-OUTPUT_FILE="$ROOT_DIR/src/canvas-host/a2ui/a2ui.bundle.js"
-A2UI_RENDERER_DIR="$ROOT_DIR/vendor/a2ui/renderers/lit"
-A2UI_APP_DIR="$ROOT_DIR/apps/shared/OpenClawKit/Tools/CanvasA2UI"
+ROOT_DIR="$ROOT_DIR_POSIX"
+HASH_FILE="$ROOT_DIR_POSIX/src/canvas-host/a2ui/.bundle.hash"
+OUTPUT_FILE="$ROOT_DIR_POSIX/src/canvas-host/a2ui/a2ui.bundle.js"
+A2UI_RENDERER_DIR="$ROOT_DIR_POSIX/vendor/a2ui/renderers/lit"
+A2UI_APP_DIR="$ROOT_DIR_POSIX/apps/shared/OpenClawKit/Tools/CanvasA2UI"
 
 # Docker builds exclude vendor/apps via .dockerignore.
 # In that environment we must keep the prebuilt bundle.
@@ -40,7 +40,19 @@ is_wsl() {
 
 run_pnpm() {
   if is_wsl && command -v cmd.exe >/dev/null 2>&1; then
-    cmd.exe /c pnpm "$@"
+    local converted=()
+    for arg in "$@"; do
+      if [[ "$arg" == /* || "$arg" == .*/* || "$arg" == ~/* ]]; then
+        if conv="$(wslpath -w "$arg" 2>/dev/null)"; then
+          converted+=("$conv")
+        else
+          converted+=("$arg")
+        fi
+      else
+        converted+=("$arg")
+      fi
+    done
+    cmd.exe /c pnpm "${converted[@]}"
   else
     pnpm "$@"
   fi
@@ -48,7 +60,19 @@ run_pnpm() {
 
 run_rolldown() {
   if is_wsl && command -v cmd.exe >/dev/null 2>&1; then
-    cmd.exe /c rolldown "$@"
+    local converted=()
+    for arg in "$@"; do
+      if [[ "$arg" == /* || "$arg" == .*/* || "$arg" == ~/* ]]; then
+        if conv="$(wslpath -w "$arg" 2>/dev/null)"; then
+          converted+=("$conv")
+        else
+          converted+=("$arg")
+        fi
+      else
+        converted+=("$arg")
+      fi
+    done
+    cmd.exe /c rolldown "${converted[@]}"
   else
     rolldown "$@"
   fi
