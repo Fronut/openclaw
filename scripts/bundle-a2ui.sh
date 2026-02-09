@@ -19,6 +19,7 @@ HASH_FILE="$ROOT_DIR_POSIX/src/canvas-host/a2ui/.bundle.hash"
 OUTPUT_FILE="$ROOT_DIR_POSIX/src/canvas-host/a2ui/a2ui.bundle.js"
 A2UI_RENDERER_DIR="$ROOT_DIR_POSIX/vendor/a2ui/renderers/lit"
 A2UI_APP_DIR="$ROOT_DIR_POSIX/apps/shared/OpenClawKit/Tools/CanvasA2UI"
+HASH_ROOT="${ROOT_DIR_WIN:-$ROOT_DIR_POSIX}"
 
 # Docker builds exclude vendor/apps via .dockerignore.
 # In that environment we must keep the prebuilt bundle.
@@ -28,10 +29,10 @@ if [[ ! -d "$A2UI_RENDERER_DIR" || ! -d "$A2UI_APP_DIR" ]]; then
 fi
 
 INPUT_PATHS=(
-  "$ROOT_DIR/package.json"
-  "$ROOT_DIR/pnpm-lock.yaml"
-  "$A2UI_RENDERER_DIR"
-  "$A2UI_APP_DIR"
+  "$HASH_ROOT/package.json"
+  "$HASH_ROOT/pnpm-lock.yaml"
+  "$HASH_ROOT/vendor/a2ui/renderers/lit"
+  "$HASH_ROOT/apps/shared/OpenClawKit/Tools/CanvasA2UI"
 )
 
 is_wsl() {
@@ -79,24 +80,13 @@ run_rolldown() {
 }
 
 compute_hash() {
-  ROOT_DIR="$ROOT_DIR" node --input-type=module - "${INPUT_PATHS[@]}" <<'NODE'
+  HASH_ROOT="$HASH_ROOT" node --input-type=module - "${INPUT_PATHS[@]}" <<'NODE'
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
-const toWinPath = (p) => {
-  if (process.platform !== "win32") return p;
-  if (p.startsWith("/mnt/")) {
-    const drive = p[5]?.toUpperCase();
-    const rest = p.slice(7).replaceAll("/", "\\");
-    return drive ? `${drive}:\\${rest}` : p;
-  }
-  if (p.startsWith("/")) return p.replaceAll("/", "\\");
-  return p;
-};
-
-const rootDir = toWinPath(process.env.ROOT_DIR ?? process.cwd());
-const inputs = process.argv.slice(2).map(toWinPath);
+const rootDir = process.env.HASH_ROOT ?? process.cwd();
+const inputs = process.argv.slice(2);
 const files = [];
 
 async function walk(entryPath) {
